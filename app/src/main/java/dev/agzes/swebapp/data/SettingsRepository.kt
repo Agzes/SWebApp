@@ -26,6 +26,7 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = intPreferencesKey("theme_mode")
         val SHOW_NOTIFICATION = booleanPreferencesKey("show_notification")
         val RESTRICT_WEB_FEATURES = booleanPreferencesKey("restrict_web_features")
+        val INTERCEPT_CONSOLE = booleanPreferencesKey("intercept_console")
     }
 
     val selectedFolderUriFlow: Flow<String?> = context.dataStore.data
@@ -76,6 +77,11 @@ class SettingsRepository(private val context: Context) {
     val restrictWebFeaturesFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[RESTRICT_WEB_FEATURES] ?: true
+        }
+
+    val interceptConsoleFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[INTERCEPT_CONSOLE] ?: false
         }
 
     suspend fun saveSelectedFolderUri(uri: String) {
@@ -136,6 +142,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun saveRestrictWebFeatures(restrict: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[RESTRICT_WEB_FEATURES] = restrict
+        }
+    }
+
+    suspend fun saveInterceptConsole(intercept: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[INTERCEPT_CONSOLE] = intercept
         }
     }
 }

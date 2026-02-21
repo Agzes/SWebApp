@@ -12,11 +12,13 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.path
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
@@ -56,6 +58,7 @@ class SpaServer(private val appContext: Context) {
         localhostOnly: Boolean,
         spaMode: Boolean,
         hotReload: Boolean,
+        interceptConsole: Boolean,
         folderUri: String,
         themeMode: Boolean,
         restrictWebFeatures: Boolean
@@ -88,17 +91,36 @@ class SpaServer(private val appContext: Context) {
                     }
                 }
 
+                if (interceptConsole) {
+                    post("/__console_log") {
+                        try {
+                            val msg = call.receiveText()
+                            ServerLogger.log("[Browser Console] $msg")
+                            call.respond(HttpStatusCode.OK)
+                        } catch (e: Exception) {
+                            call.respond(HttpStatusCode.InternalServerError)
+                        }
+                    }
+                }
+
                 get("/{...}") {
                     val path = call.request.path().removePrefix("/")
                     val requestNonce = if (hotReload) java.util.UUID.randomUUID().toString().replace("-", "") else ""
                     call.response.headers.append("X-Content-Type-Options", "nosniff")
                     call.response.headers.append("X-Frame-Options", "SAMEORIGIN")
                     call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
-                    val scriptSrc = if (hotReload) "'self' 'unsafe-inline' 'nonce-$requestNonce'"
-                    else "'self' 'unsafe-inline'"
+                    val scriptSrc = "'self' 'unsafe-inline' 'unsafe-eval' https: blob:"
                     call.response.headers.append(
                         "Content-Security-Policy",
-                        "default-src 'self'; script-src $scriptSrc; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+                        "default-src 'self' https: data: blob:; " +
+                                "script-src $scriptSrc; " +
+                                "style-src 'self' 'unsafe-inline' https:; " +
+                                "font-src 'self' data: https:; " +
+                                "connect-src 'self' ws: wss: https: blob:; " +
+                                "worker-src 'self' blob:; " +
+                                "img-src 'self' data: blob: https:; " +
+                                "media-src 'self' data: blob: https:; " +
+                                "frame-src 'self' https:;"
                     )
                     if (restrictWebFeatures) {
                         call.response.headers.append(
@@ -164,13 +186,18 @@ class SpaServer(private val appContext: Context) {
                             "svg" -> ContentType.Image.SVG
                             "wasm" -> ContentType.Application.Wasm
                             "ico" -> ContentType("image", "x-icon")
+                            "woff" -> ContentType("font", "woff")
+                            "woff2" -> ContentType("font", "woff2")
+                            "ttf" -> ContentType("font", "ttf")
+                            "otf" -> ContentType("font", "otf")
+                            "eot" -> ContentType("application", "vnd.ms-fontobject")
                             else -> ContentType.Application.OctetStream
                         }
 
                         val isHtml = extension.equals("html", true) || extension.equals("htm", true)
                         val fileSize = targetFile.length()
 
-                        if (hotReload && isHtml) {
+                        if ((hotReload || interceptConsole) && isHtml && fileSize <= MAX_BUFFERED_SIZE) {
                             val bytes = withContext(Dispatchers.IO) {
                                 try {
                                     appContext.contentResolver.openInputStream(targetFile!!.uri)?.use { stream ->
@@ -181,20 +208,42 @@ class SpaServer(private val appContext: Context) {
                                 }
                             }
                             if (bytes != null) {
-                                val script = "<script nonce=\"$requestNonce\">\n" +
+                                val sb = StringBuilder()
+                                sb.appendLine("<script nonce=\"$requestNonce\">")
+                                if (interceptConsole) {
+                                    sb.appendLine(
+                                        "    ['log', 'warn', 'error', 'info'].forEach(function(method) {\n" +
+                                        "        var original = console[method];\n" +
+                                        "        console[method] = function() {\n" +
+                                        "            var args = Array.from(arguments);\n" +
+                                        "            var msg = '[' + method.toUpperCase() + '] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');\n" +
+                                        "            fetch('/__console_log', {method: 'POST', body: msg});\n" +
+                                        "            original.apply(console, args);\n" +
+                                        "        };\n" +
+                                        "    });"
+                                    )
+                                }
+                                if (hotReload) {
+                                    sb.appendLine(
                                         "    function pollHotReload() {\n" +
                                         "        fetch('/__hot_reload')\n" +
                                         "        .then(r=>r.text())\n" +
                                         "        .then(t=>{if(t==='reload')location.reload();else pollHotReload();})\n" +
                                         "        .catch(()=>setTimeout(pollHotReload, 2000));\n" +
                                         "    }\n" +
-                                        "    pollHotReload();\n" +
-                                        "</script>"
+                                        "    pollHotReload();"
+                                    )
+                                }
+                                sb.appendLine("</script>")
+                                val script = sb.toString()
+                                
                                 val htmlString = String(bytes)
-                                val finalHtml = if (htmlString.contains("</body>", ignoreCase = true)) {
+                                val finalHtml = if (htmlString.contains("</head>", ignoreCase = true)) {
+                                    htmlString.replace("</head>", "$script\n</head>", ignoreCase = true)
+                                } else if (htmlString.contains("</body>", ignoreCase = true)) {
                                     htmlString.replace("</body>", "$script\n</body>", ignoreCase = true)
                                 } else {
-                                    htmlString + script
+                                    script + htmlString
                                 }
                                 call.respondText(finalHtml, ContentType.Text.Html)
                             } else {

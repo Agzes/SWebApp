@@ -21,18 +21,25 @@ class ActionReceiver : BroadcastReceiver() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == ACTION_COPY_URL) {
+        val action = intent.action ?: return
+        val isFromSelf = intent.`package` == context.packageName || 
+                         intent.component?.packageName == context.packageName
+        if (!isFromSelf) {
+            return
+        }
+
+        if (action == ACTION_COPY_URL) {
             val url = intent.getStringExtra(EXTRA_URL)
             if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText("URL", url))
                 Toast.makeText(context, "URL Copied to clipboard", Toast.LENGTH_SHORT).show()
             }
-        } else if (intent.action == ACTION_START_SERVER) {
+        } else if (action == ACTION_START_SERVER) {
             receiverScope.launch {
                 val showNotification = dev.agzes.swebapp.data.SettingsRepository(context).showNotificationFlow.first()
                 val serviceIntent = Intent(context, dev.agzes.swebapp.service.ServerService::class.java).apply {
-                    action = dev.agzes.swebapp.service.ServerService.ACTION_START
+                    this.action = dev.agzes.swebapp.service.ServerService.ACTION_START
                 }
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && showNotification) {
                     context.startForegroundService(serviceIntent)
@@ -40,9 +47,9 @@ class ActionReceiver : BroadcastReceiver() {
                     context.startService(serviceIntent)
                 }
             }
-        } else if (intent.action == ACTION_STOP_SERVER) {
+        } else if (action == ACTION_STOP_SERVER) {
             val serviceIntent = Intent(context, dev.agzes.swebapp.service.ServerService::class.java).apply {
-                action = dev.agzes.swebapp.service.ServerService.ACTION_STOP
+                this.action = dev.agzes.swebapp.service.ServerService.ACTION_STOP
             }
             context.startService(serviceIntent)
         }

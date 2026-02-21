@@ -158,6 +158,7 @@ fun MainScreen(repository: SettingsRepository) {
     val hotReload by repository.hotReloadFlow.collectAsState(initial = false)
     val showNotification by repository.showNotificationFlow.collectAsState(initial = true)
     val restrictWebFeatures by repository.restrictWebFeaturesFlow.collectAsState(initial = true)
+    val interceptConsole by repository.interceptConsoleFlow.collectAsState(initial = false)
     val themeMode by repository.themeModeFlow.collectAsState(initial = 0)
     val port by repository.portFlow.collectAsState(initial = 8080)
 
@@ -553,6 +554,13 @@ fun MainScreen(repository: SettingsRepository) {
                             description = "Block camera, microphone, and geolocation",
                             checked = restrictWebFeatures,
                             onCheckedChange = { scope.launch { repository.saveRestrictWebFeatures(it) } }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        SettingSwitch(
+                            label = "Log Browser Console",
+                            description = "Send browser console logs to the server",
+                            checked = interceptConsole,
+                            onCheckedChange = { scope.launch { repository.saveInterceptConsole(it) } }
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))

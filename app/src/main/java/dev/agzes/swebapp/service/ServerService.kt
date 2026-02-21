@@ -57,6 +57,14 @@ class ServerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action != null) {
+            val isFromSelf = intent.`package` == packageName || 
+                             intent.component?.packageName == packageName
+            if (!isFromSelf) {
+                return START_NOT_STICKY
+            }
+        }
+        
         when (intent?.action) {
             ACTION_START -> startServer()
             ACTION_STOP -> stopServer()
@@ -80,6 +88,7 @@ class ServerService : Service() {
                 val batterySaver = settingsRepository.batterySaverFlow.first()
                 val showNotification = settingsRepository.showNotificationFlow.first()
                 val restrictWebFeatures = settingsRepository.restrictWebFeaturesFlow.first()
+                val interceptConsole = settingsRepository.interceptConsoleFlow.first()
                 val currentThemeMode = settingsRepository.themeModeFlow.first()
                 val isSystemDark =
                     (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -93,8 +102,11 @@ class ServerService : Service() {
                     batteryReceiver = object : android.content.BroadcastReceiver() {
                         override fun onReceive(context: Context, intent: Intent) {
                             if (intent.action == Intent.ACTION_BATTERY_LOW) {
-                                ServerLogger.log("Battery Low: Auto-stopping server")
-                                stopServer()
+                                val isFromSystem = intent.`package` == "android" || intent.`package` == null
+                                if (isFromSystem) {
+                                    ServerLogger.log("Battery Low: Auto-stopping server")
+                                    stopServer()
+                                }
                             }
                         }
                     }
@@ -103,7 +115,7 @@ class ServerService : Service() {
                 }
 
                 spaServer = SpaServer(applicationContext)
-                spaServer?.start(port, localhostOnly, spaMode, hotReload, folderUri, isDarkTheme, restrictWebFeatures)
+                spaServer?.start(port, localhostOnly, spaMode, hotReload, interceptConsole, folderUri, isDarkTheme, restrictWebFeatures)
                 isRunning = true
 
                 val displayHost =
@@ -130,19 +142,17 @@ class ServerService : Service() {
     }
 
     private fun updateWidgetInfo(url: String? = null) {
-        val widgetCls = dev.agzes.swebapp.widget.ServerWidgetProvider::class.java
         if (url != null) {
-            val intent = Intent(this, widgetCls).apply {
-                action = dev.agzes.swebapp.widget.ServerWidgetProvider.ACTION_UPDATE_WIDGET
-                putExtra("extra_url", url)
-            }
-            sendBroadcast(intent)
-        } else {
-            val intent = Intent(this, widgetCls).apply {
-                action = dev.agzes.swebapp.widget.ServerWidgetProvider.ACTION_REFRESH_WIDGET
-            }
-            sendBroadcast(intent)
+            getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString("last_url", url)
+                .apply()
         }
+        val widgetCls = dev.agzes.swebapp.widget.ServerWidgetProvider::class.java
+        val intent = Intent(this, widgetCls).apply {
+            action = dev.agzes.swebapp.widget.ServerWidgetProvider.ACTION_REFRESH_WIDGET
+        }
+        sendBroadcast(intent)
     }
 
     private fun stopServer() {

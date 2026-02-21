@@ -38,30 +38,14 @@ class ServerWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_UPDATE_WIDGET) {
-            val url = intent.getStringExtra("extra_url")
-            if (url != null && isSafeUrl(url)) {
-                context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putString("last_url", url)
-                    .apply()
-            }
-            val finalUrl = if (url != null && isSafeUrl(url)) url
-            else context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
-                .getString("last_url", null)
-
+        if (intent.action == ACTION_UPDATE_WIDGET || intent.action == ACTION_REFRESH_WIDGET) {
+            val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+            val savedUrl = prefs.getString("last_url", null)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = android.content.ComponentName(context, ServerWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             for (appWidgetId in appWidgetIds) {
-                updateAppWidget(context, appWidgetManager, appWidgetId, finalUrl)
-            }
-        } else if (intent.action == ACTION_REFRESH_WIDGET) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = android.content.ComponentName(context, ServerWidgetProvider::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            for (appWidgetId in appWidgetIds) {
-                updateAppWidget(context, appWidgetManager, appWidgetId, null)
+                updateAppWidget(context, appWidgetManager, appWidgetId, savedUrl)
             }
         }
     }
