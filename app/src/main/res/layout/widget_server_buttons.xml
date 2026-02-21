@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_background"
+    android:padding="8dp"
+    android:gravity="center"
+>
+
+    <LinearLayout
+        android:id="@+id/widgetBtnToggle"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_bg_start"
+    >
+
+        <ImageView
+            android:id="@+id/widgetToggleIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_play"
+        />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="8dp"
+        android:layout_height="match_parent"
+    />
+
+    <ImageButton
+        android:id="@+id/widgetBtnApp"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:src="@drawable/ic_apps"
+        android:scaleType="centerInside"
+        android:background="@drawable/widget_btn_bg_secondary"
+        android:contentDescription="Open App"
+    />
+
+    <FrameLayout
+        android:layout_width="8dp"
+        android:layout_height="match_parent"
+        android:id="@+id/widgetSpaceBrowser"
+    />
+
+    <ImageButton
+        android:id="@+id/widgetBtnBrowser"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:src="@drawable/ic_open_in_new"
+        android:scaleType="centerInside"
+        android:background="@drawable/widget_btn_bg_secondary"
+        android:visibility="gone"
+        android:contentDescription="Open Browser"
+    />
+
+</LinearLayout>
